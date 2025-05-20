@@ -313,15 +313,14 @@ func pick_up_card(card:Area2D):
 #	has to be a card
 	if not card.is_in_group("card"):
 		return
-	if not all_children_match(card):
+	if not matching_children_count(card):
 		return
 	
 		
 	dist = card.global_position-get_global_mouse_position()
 	orig_pos = card.global_position
 	card_selector(card,true)
-	var full_deck_arr = get_full_deck(card)
-	if len(full_deck_arr)>=deck_limit:
+	if is_full_deck(card):
 		highlight_empty_space(true)
 	else:
 		highlight_empty_space(false)		
@@ -385,20 +384,19 @@ func use_card(target:Node2D):
 
 		var target_space = get_empty_space(target)
 
-		var space_child := get_child_by_groups(target_space,["card"])
-
+		# var space_child := get_child_by_groups(target_space,["card"])
 #		print_debug(space_child and is_full_deck(space_child))
 		# Reparent and set tween new position
 		var defualt_scale = picked_up_card.global_scale
-		var only_one = check_if_only_one(target,picked_up_card)
 		parent.remove_child(picked_up_card)
 		target.add_child(picked_up_card)
-		if (space_child and is_full_deck(space_child)) or is_full_deck(picked_up_card):
-			should_close = true
-		elif only_one:
+		var only_one = check_if_only_one(target_space)
+		if only_one:
 			target.remove_child(picked_up_card)
 			parent.add_child(picked_up_card)
 			return
+		elif is_full_deck(target_space):
+			should_close = true
 #		print_debug("POS IS: ", orig_pos)
 		if should_close:
 			close_stack(target_space)
@@ -428,8 +426,7 @@ func highlight_empty_space(on:bool):
 			top_space.get_node("Icon").visible = on
 	for bottom_space in bottom_spaces.get_children():
 		if (get_child_by_groups(bottom_space,["card"]) == null
-				and not bottom_space.closed 
-				and unlocked_slots[bottom_space.index]):
+				and not bottom_space.closed):
 			bottom_space.get_node("Icon").visible = on
 
 func unlock_next_space():
@@ -473,28 +470,34 @@ func contains_type(card,stack_array:Array)->bool:
 	return false
 
 # the top spaces rules 
-func check_if_only_one(target:Area2D,card:Area2D)->bool:
-	if target.is_in_group("only_one") or target.get_parent().is_in_group("only_one"):
-		if (get_child_by_groups(target,["card"]) 
-			or target.is_in_group("card") 
-			or get_child_by_groups(card,["card"])
-#			or contains_type(card,top_spaces.get_children())
-			or not unlocked_slots[target.index]):
+func check_if_only_one(target_space:Area2D)->bool:
+	# if is top space
+	if target_space.is_in_group("only_one"):
+		# check if move was invalid
+		if (not unlocked_slots[target_space.index]
+			or ((matching_children_count(target_space) != 1)
+			and (matching_children_count(target_space) != deck_limit))):
 			return true
 	return false
 
-func all_children_match(parent:Area2D)->bool:
-	var all_match = true
+func matching_children_count(parent:Area2D) -> int:
+	var matching_count = 1
 	var child_card := get_child_by_groups(parent,["card"])
+	if parent.is_in_group("empty_space"):
+		if not child_card:
+			return 0
+		parent = child_card
+		child_card = get_child_by_groups(parent,["card"])
 	while true:
 #		print_debug(last_child)
 		if not child_card:
 			break
 		if not matching_types(parent,child_card):
-			all_match = false
+			matching_count = 0
 			break
+		matching_count += 1
 		child_card = get_child_by_groups(child_card,["card"])
-	return all_match
+	return matching_count
 
 func matching_types(card_1:Area2D,card_2:Area2D) -> bool:
 	if card_1.is_in_group("empty_space") or card_2.is_in_group("empty_space"):
@@ -503,39 +506,8 @@ func matching_types(card_1:Area2D,card_2:Area2D) -> bool:
 	return card_1.card_type == card_2.card_type
 
 func is_full_deck(first_card:Area2D)->bool:
-	var child_card = get_child_by_groups(first_card,["card"])
-#	var is_full = true
-	for _n in range(deck_limit-1):
-		if not child_card:
-			return false
-#		print_debug("IS it the full deck that i am dreaming of",not matching_types(first_card,child_card))
-		if not matching_types(first_card,child_card):
-			return false
-		child_card = get_child_by_groups(child_card,["card"])
-	return true
+	return matching_children_count(first_card) == deck_limit
 
-func get_full_deck(card_in_deck:Area2D)->Array:
-	var deck_array = [card_in_deck]
-	var parent = card_in_deck.get_parent()
-	while true:
-		if not parent or parent.is_in_group("empty_space"):
-			break
-		print_debug(parent.get_groups())
-		if matching_types(parent,card_in_deck):
-			deck_array.push_back(parent)
-		else:
-			break
-		parent = parent.get_parent()
-	var child = get_child_by_groups(card_in_deck,["card"])
-	while true:
-		if not child or child.is_in_group("empty_space"):
-			break
-		if matching_types(child,card_in_deck):
-			deck_array.push_back(child)
-		else:
-			break
-		child = get_child_by_groups(child,["card"])
-	return deck_array
 func let_go_of_card():
 	if not picked_up_card:
 		return
